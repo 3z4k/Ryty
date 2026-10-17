@@ -57,6 +57,33 @@ extern "C" void RytyMetalSetScissorRect(unsigned int x, unsigned int y, unsigned
 extern "C" void RytyMetalSetBlendMode(int blendMode) {
     (void)blendMode;
 }
+extern "C" void RytyMetalSetCullMode(int cullMode) {
+    (void)cullMode;
+}
+extern "C" void RytyMetalSetTriangleFillMode(int fillMode) {
+    (void)fillMode;
+}
+extern "C" void RytyMetalSetFrontFacingWinding(int winding) {
+    (void)winding;
+}
+extern "C" void RytyMetalSetDepthBias(float depthBias, float slopeScale, float clamp) {
+    (void)depthBias; (void)slopeScale; (void)clamp;
+}
+extern "C" void RytyMetalSetStencilReferenceValue(unsigned int referenceValue) {
+    (void)referenceValue;
+}
+extern "C" void RytyMetalSetRenderPipelineState(void* pipelineState) {
+    (void)pipelineState;
+}
+extern "C" void RytyMetalSetComputePipelineState(void* computePipeline) {
+    (void)computePipeline;
+}
+extern "C" void RytyMetalDispatchThreadgroups(unsigned int threadsX, unsigned int threadsY, unsigned int threadsZ, unsigned int tgX, unsigned int tgY, unsigned int tgZ) {
+    (void)threadsX; (void)threadsY; (void)threadsZ; (void)tgX; (void)tgY; (void)tgZ;
+}
+extern "C" void RytyMetalSetSamplerState(int index, void* sampler) {
+    (void)index; (void)sampler;
+}
 extern "C" void RytyMetalDrawPrimitives(int primitiveType, unsigned int start, unsigned int count) {
     (void)primitiveType; (void)start; (void)count;
 }
@@ -82,10 +109,14 @@ constexpr std::uint32_t CPU_SUBTYPE_ALL = 0x00000003;
 constexpr std::uint32_t MH_EXECUTE = 0x00000002;
 
 constexpr std::uint32_t LC_SEGMENT_64 = 0x19;
+constexpr std::uint32_t LC_SYMTAB = 0x02;
+constexpr std::uint32_t LC_DYSYMTAB = 0x0b;
 constexpr std::uint32_t LC_LOAD_DYLIB = 0x0c;
 constexpr std::uint32_t LC_LOAD_DYLINKER = 0x0e;
+constexpr std::uint32_t LC_UUID = 0x1b;
 constexpr std::uint32_t LC_MAIN = 0x80000028;
 constexpr std::uint32_t LC_RPATH = 0x8000001c;
+constexpr std::uint32_t LC_SOURCE_VERSION = 0x2a;
 constexpr std::uint32_t LC_BUILD_VERSION = 0x32;
 constexpr std::uint32_t LC_CODE_SIGNATURE = 0x1d;
 
@@ -158,6 +189,50 @@ struct LinkeditDataCommand {
     std::uint32_t DataSize;
 };
 
+struct UuidCommand {
+    std::uint32_t Cmd;
+    std::uint32_t CmdSize;
+    std::uint8_t Uuid[16];
+};
+
+struct SourceVersionCommand {
+    std::uint32_t Cmd;
+    std::uint32_t CmdSize;
+    std::uint64_t Version;
+};
+
+struct SymtabCommand {
+    std::uint32_t Cmd;
+    std::uint32_t CmdSize;
+    std::uint32_t SymOff;
+    std::uint32_t NSyms;
+    std::uint32_t StrOff;
+    std::uint32_t StrSize;
+};
+
+struct DysymtabCommand {
+    std::uint32_t Cmd;
+    std::uint32_t CmdSize;
+    std::uint32_t ILocalsym;
+    std::uint32_t NLocalsym;
+    std::uint32_t IExtdefsym;
+    std::uint32_t NExtdefsym;
+    std::uint32_t IUndefsym;
+    std::uint32_t NUndefsym;
+    std::uint32_t TocOff;
+    std::uint32_t NToc;
+    std::uint32_t ModtabOff;
+    std::uint32_t NModtab;
+    std::uint32_t ExtrefsymOff;
+    std::uint32_t NExtrefsym;
+    std::uint32_t IndirectsymOff;
+    std::uint32_t NIndirectsym;
+    std::uint32_t Extreloff;
+    std::uint32_t NExtrel;
+    std::uint32_t Locreloff;
+    std::uint32_t NLocrel;
+};
+
 #pragma pack(push, 1)
 struct Section64 {
     char SectName[16];
@@ -172,6 +247,14 @@ struct Section64 {
     std::uint32_t Reserved1;
     std::uint32_t Reserved2;
     std::uint32_t Reserved3;
+};
+
+struct Nlist64 {
+    std::uint32_t NStrx;
+    std::uint8_t NType;
+    std::uint8_t NSect;
+    std::uint16_t NDesc;
+    std::uint64_t NValue;
 };
 #pragma pack(pop)
 
@@ -223,6 +306,52 @@ std::vector<std::uint8_t> makeBuildVersionCommand() {
     cmd->MinOS = 0x000B0000; // macOS 11.0
     cmd->SDK = 0x000E0000; // macOS 14.0
     cmd->NTools = 0;
+    return buf;
+}
+
+std::vector<std::uint8_t> makeUuidCommand(const std::vector<std::uint8_t>& seed) {
+    std::vector<std::uint8_t> buf(sizeof(UuidCommand), 0);
+    auto* cmd = reinterpret_cast<UuidCommand*>(buf.data());
+    cmd->Cmd = LC_UUID;
+    cmd->CmdSize = sizeof(UuidCommand);
+    std::uint64_t h1 = 0x811c9dc5, h2 = 0xcbf29ce484222325ULL;
+    for (std::size_t i = 0; i < seed.size(); ++i) {
+        h1 = (h1 ^ seed[i]) * 16777619u;
+        h2 = (h2 ^ seed[i]) * 1099511628211ULL;
+    }
+    std::memcpy(cmd->Uuid, &h1, 8);
+    std::memcpy(cmd->Uuid + 8, &h2, 8);
+    return buf;
+}
+
+std::vector<std::uint8_t> makeSourceVersionCommand() {
+    std::vector<std::uint8_t> buf(sizeof(SourceVersionCommand), 0);
+    auto* cmd = reinterpret_cast<SourceVersionCommand*>(buf.data());
+    cmd->Cmd = LC_SOURCE_VERSION;
+    cmd->CmdSize = sizeof(SourceVersionCommand);
+    cmd->Version = 0x0001000000060000ULL; // 1.0.6.0
+    return buf;
+}
+
+std::vector<std::uint8_t> makeSymtabCommand(std::uint32_t symOff, std::uint32_t nSyms, std::uint32_t strOff, std::uint32_t strSize) {
+    std::vector<std::uint8_t> buf(sizeof(SymtabCommand), 0);
+    auto* cmd = reinterpret_cast<SymtabCommand*>(buf.data());
+    cmd->Cmd = LC_SYMTAB;
+    cmd->CmdSize = sizeof(SymtabCommand);
+    cmd->SymOff = symOff;
+    cmd->NSyms = nSyms;
+    cmd->StrOff = strOff;
+    cmd->StrSize = strSize;
+    return buf;
+}
+
+std::vector<std::uint8_t> makeDysymtabCommand(std::uint32_t nSyms) {
+    std::vector<std::uint8_t> buf(sizeof(DysymtabCommand), 0);
+    auto* cmd = reinterpret_cast<DysymtabCommand*>(buf.data());
+    cmd->Cmd = LC_DYSYMTAB;
+    cmd->CmdSize = sizeof(DysymtabCommand);
+    cmd->IExtdefsym = 0;
+    cmd->NExtdefsym = nSyms;
     return buf;
 }
 
@@ -510,15 +639,54 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
     const std::uint64_t trampVmaddr = guestEnd;
     const std::uint64_t linkeditVmaddr = (trampVmaddr + trampolineTotalSize + PageMask) & ~PageMask;
 
+    const std::uint64_t entryVA = e_entry + rebase;
+
+    // ---- Build Mach-O Symbol Table and String Table ----
+    std::vector<Nlist64> symEntries;
+    std::string strTable;
+    strTable.push_back('\0'); // Offset 0 is empty string
+
+    // Sym 0: _main entry point
+    {
+        Nlist64 sym{};
+        sym.NStrx = static_cast<std::uint32_t>(strTable.size());
+        strTable += "_main";
+        strTable.push_back('\0');
+        sym.NType = 0x0f; // N_SECT | N_EXT
+        sym.NSect = 1;    // __TEXT section
+        sym.NDesc = 0;
+        sym.NValue = entryVA;
+        symEntries.push_back(sym);
+    }
+
+    // Sym 1..N: Trampoline sites
+    for (std::size_t idx = 0; idx < trampolines.size(); ++idx) {
+        Nlist64 sym{};
+        sym.NStrx = static_cast<std::uint32_t>(strTable.size());
+        strTable += "_trampoline_" + std::to_string(idx);
+        strTable.push_back('\0');
+        sym.NType = 0x0e; // N_SECT (local)
+        sym.NSect = 1;
+        sym.NDesc = 0;
+        sym.NValue = trampVmaddr + idx * 16;
+        symEntries.push_back(sym);
+    }
+
+    const auto uuidCmd = makeUuidCommand(sourceElf);
+    const auto sourceVerCmd = makeSourceVersionCommand();
+
     // ---- Compute load command sizes and the page-aligned payload position ----
     const std::uint32_t cmdsCount = static_cast<std::uint32_t>(segs.size() + 2 /*tramp,linkedit*/ + 1 /*main*/
-        + 1 /*dylinker*/ + 1 /*buildver*/ + 5 /*dylibs*/ + 1 /*rpath*/);
-    const std::uint64_t cmdsSize = sizeof(SegmentCommand64) * (segs.size() + 2)
+        + 1 /*dylinker*/ + 1 /*buildver*/ + 5 /*dylibs*/ + 1 /*rpath*/
+        + 1 /*uuid*/ + 1 /*sourcever*/ + 1 /*symtab*/ + 1 /*dysymtab*/);
+    const std::uint64_t cmdsSizeWithoutSyms = sizeof(SegmentCommand64) * (segs.size() + 2)
         + (haveExec ? sizeof(Section64) : 0)
         + sizeof(MainCommand)
         + dylinkerCmd.size() + buildVerCmd.size()
         + metalLibCmd.size() + metalKitLibCmd.size() + cocoaLibCmd.size()
-        + quartzCoreLibCmd.size() + libSystemCmd.size() + rpathCmd.size();
+        + quartzCoreLibCmd.size() + libSystemCmd.size() + rpathCmd.size()
+        + uuidCmd.size() + sourceVerCmd.size();
+    const std::uint64_t cmdsSize = cmdsSizeWithoutSyms + sizeof(SymtabCommand) + sizeof(DysymtabCommand);
     const std::uint64_t headerAll = sizeof(MachOHeader64) + cmdsSize;
     const std::uint64_t payloadFileOff = (headerAll + PageMask) & ~PageMask; // page-aligned file position of the ELF
 
@@ -539,10 +707,19 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
     cursor = (cursor + PageMask) & ~PageMask;
     const std::uint64_t linkeditFileOff = cursor;
 
+    const std::uint32_t symTabOffset = static_cast<std::uint32_t>(linkeditFileOff);
+    const std::uint32_t nSyms = static_cast<std::uint32_t>(symEntries.size());
+    const std::uint32_t symTabBytes = nSyms * sizeof(Nlist64);
+    const std::uint32_t strTabOffset = symTabOffset + symTabBytes;
+    const std::uint32_t strTabBytes = static_cast<std::uint32_t>(strTable.size());
+    const std::uint64_t linkeditDataSize = symTabBytes + strTabBytes;
+
+    const auto symtabCmd = makeSymtabCommand(symTabOffset, nSyms, strTabOffset, strTabBytes);
+    const auto dysymtabCmd = makeDysymtabCommand(nSyms);
+
     // ---- Entry point ----
     std::uint64_t entryoff = 0;
     bool foundEntry = false;
-    const std::uint64_t entryVA = e_entry + rebase;
     for (const auto& g : segs) {
         if (entryVA >= g.vmaddr && entryVA < g.vmaddr + g.vmsize) {
             entryoff = g.fileoff + (entryVA - g.vmaddr);
@@ -589,7 +766,7 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
 
     // ---- Assemble the Mach-O ----
     std::vector<std::uint8_t> result;
-    result.reserve(static_cast<std::size_t>(linkeditFileOff + 0x1000));
+    result.reserve(static_cast<std::size_t>(linkeditFileOff + linkeditDataSize + 0x1000));
     const auto appendBytes = [&](const void* ptr, std::size_t size) {
         const auto* bytePtr = static_cast<const std::uint8_t*>(ptr);
         result.insert(result.end(), bytePtr, bytePtr + size);
@@ -654,8 +831,8 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
         SegmentCommand64 sc{};
         sc.Cmd = LC_SEGMENT_64; sc.CmdSize = sizeof(SegmentCommand64);
         std::strncpy(sc.SegName, "__LINKEDIT", 16);
-        sc.VAddr = linkeditVmaddr; sc.VSize = 0x1000;
-        sc.FileOff = linkeditFileOff; sc.FileSize = 0; // codesign(1) fills this
+        sc.VAddr = linkeditVmaddr; sc.VSize = (linkeditDataSize + PageMask) & ~PageMask;
+        sc.FileOff = linkeditFileOff; sc.FileSize = linkeditDataSize;
         sc.MaxProt = 1; sc.InitProt = 1;
         appendBytes(&sc, sizeof(sc));
     }
@@ -668,6 +845,10 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
     }
     appendBytes(dylinkerCmd.data(), dylinkerCmd.size());
     appendBytes(buildVerCmd.data(), buildVerCmd.size());
+    appendBytes(uuidCmd.data(), uuidCmd.size());
+    appendBytes(sourceVerCmd.data(), sourceVerCmd.size());
+    appendBytes(symtabCmd.data(), symtabCmd.size());
+    appendBytes(dysymtabCmd.data(), dysymtabCmd.size());
     appendBytes(metalLibCmd.data(), metalLibCmd.size());
     appendBytes(metalKitLibCmd.data(), metalKitLibCmd.size());
     appendBytes(cocoaLibCmd.data(), cocoaLibCmd.size());
@@ -675,7 +856,7 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
     appendBytes(libSystemCmd.data(), libSystemCmd.size());
     appendBytes(rpathCmd.data(), rpathCmd.size());
 
-    // ---- File data: payload, synthetic images, trampolines ----
+    // ---- File data: payload, synthetic images, trampolines, symbol table ----
     padTo(payloadFileOff);
     appendBytes(payload.data(), payload.size());
     for (const auto& g : segs) {
@@ -685,7 +866,13 @@ std::vector<std::uint8_t> MacOsElfPatcher::Patch(
     }
     padTo(trampFileOff);
     appendBytes(trampolineBuf.data(), trampolineBuf.size());
-    padTo(linkeditFileOff); // __LINKEDIT must start within the file even when empty
+    padTo(linkeditFileOff);
+    if (!symEntries.empty()) {
+        appendBytes(symEntries.data(), symEntries.size() * sizeof(Nlist64));
+    }
+    if (!strTable.empty()) {
+        appendBytes(strTable.data(), strTable.size());
+    }
 
     std::cerr << "[ryty] e_entry=0x" << std::hex << e_entry << " entryoff=0x" << entryoff
               << std::dec << " | total size " << result.size() << " bytes\n";

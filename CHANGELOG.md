@@ -4,6 +4,13 @@ All notable changes to Ryty are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.6] - 2026-10-08
+
+### Enhanced
+- **macOS Porting Backend & Mach-O Generation**: Extended Mach-O patcher (`MacOsElfPatcher`) with `LC_UUID` (deterministic 128-bit binary UUID generation), `LC_SOURCE_VERSION` (1.0.6.0), and `LC_SYMTAB` / `LC_DYSYMTAB` symbol table generation (`nlist_64` entries for entry points and trampoline stubs) to enable binary introspection, `lldb` debugging, and symbolication on macOS.
+- **Metal Graphics API Extensions**: Expanded Metal graphics renderer bridge (`RytyMetalRenderer`) with additional C API rendering pipeline controls: `RytyMetalSetCullMode`, `RytyMetalSetTriangleFillMode`, `RytyMetalSetFrontFacingWinding`, `RytyMetalSetDepthBias`, `RytyMetalSetStencilReferenceValue`, `RytyMetalSetRenderPipelineState`, `RytyMetalSetComputePipelineState`, `RytyMetalDispatchThreadgroups`, and `RytyMetalSetSamplerState`.
+- **System PRX Library Enhancements**: Merged new system PRX functionality across `libkernel`, `libScePad`, and `libSceVideoOut` (`sceKernelSetGameBudget`, `sceKernelGetDirectMemorySize`, `sceKernelIsDevelopmentKit`, `sceKernelGetProcessTimeCounter`, `scePadSetVibration`, `scePadSetLightBar`, `sceVideoOutGetOutputMode`).
+
 ## [1.0.5] - 2026-10-07
 
 ### Fixed

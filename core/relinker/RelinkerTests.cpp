@@ -20,6 +20,15 @@ void RytyMetalDestroyBuffer(void* handle);
 void RytyMetalSetViewport(double x, double y, double width, double height, double znear, double zfar);
 void RytyMetalSetScissorRect(unsigned int x, unsigned int y, unsigned int width, unsigned int height);
 void RytyMetalSetBlendMode(int blendMode);
+void RytyMetalSetCullMode(int cullMode);
+void RytyMetalSetTriangleFillMode(int fillMode);
+void RytyMetalSetFrontFacingWinding(int winding);
+void RytyMetalSetDepthBias(float depthBias, float slopeScale, float clamp);
+void RytyMetalSetStencilReferenceValue(unsigned int referenceValue);
+void RytyMetalSetRenderPipelineState(void* pipelineState);
+void RytyMetalSetComputePipelineState(void* computePipeline);
+void RytyMetalDispatchThreadgroups(unsigned int threadsX, unsigned int threadsY, unsigned int threadsZ, unsigned int tgX, unsigned int tgY, unsigned int tgZ);
+void RytyMetalSetSamplerState(int index, void* sampler);
 void RytyMetalDrawPrimitives(int primitiveType, unsigned int start, unsigned int count);
 void RytyMetalDrawIndexedPrimitives(int primitiveType, unsigned int indexCount, int indexType, void* indexBuffer, unsigned int indexBufferOffset);
 unsigned long RytyMetalGetMaxThreadsPerThreadgroup(void);
@@ -117,10 +126,11 @@ void TestMacOsPatcher() {
     assert(patched[0] == 0xcf && patched[1] == 0xfa && patched[2] == 0xed && patched[3] == 0xfe);
 
     // Load command count: one LC_SEGMENT_64 per PT_LOAD (1) plus seg_tramp,
-    // __LINKEDIT, LC_MAIN, LC_LOAD_DYLINKER, LC_BUILD_VERSION, 5 dylibs and LC_RPATH.
+    // __LINKEDIT, LC_MAIN, LC_LOAD_DYLINKER, LC_BUILD_VERSION, 5 dylibs, LC_RPATH,
+    // LC_UUID, LC_SOURCE_VERSION, LC_SYMTAB, LC_DYSYMTAB.
     std::uint32_t cmdsCount = 0;
     std::memcpy(&cmdsCount, patched.data() + 16, 4);
-    assert(cmdsCount == 1 /* PT_LOAD segments */ + 11);
+    assert(cmdsCount == 1 /* PT_LOAD segments */ + 15);
 
     // The first command must be an executable LC_SEGMENT_64 ("__TEXT")
     // mapped at the guest's own PT_LOAD vaddr (no rebasing).
@@ -155,6 +165,15 @@ void TestMacOsPatcher() {
     RytyMetalSetViewport(0, 0, 1920, 1080, 0.0, 1.0);
     RytyMetalSetScissorRect(0, 0, 1920, 1080);
     RytyMetalSetBlendMode(1);
+    RytyMetalSetCullMode(1);
+    RytyMetalSetTriangleFillMode(0);
+    RytyMetalSetFrontFacingWinding(0);
+    RytyMetalSetDepthBias(0.0f, 0.0f, 0.0f);
+    RytyMetalSetStencilReferenceValue(0);
+    RytyMetalSetRenderPipelineState(nullptr);
+    RytyMetalSetComputePipelineState(nullptr);
+    RytyMetalDispatchThreadgroups(1, 1, 1, 16, 16, 1);
+    RytyMetalSetSamplerState(0, nullptr);
     RytyMetalDrawPrimitives(3, 0, 6);
     RytyMetalDrawIndexedPrimitives(3, 6, 0, buf, 0);
 
